@@ -11,7 +11,7 @@ Reduce3_kernel ( const int n , const int n_load,
     const int tid = threadIdx.x ;
     const int idx = bid * n ;
     extern __shared__ float s_data[];
-    if( tid > n ) return ; 
+    if( tid >= n ) return ; 
     
     //s_data[ tid ] = input[ bid * n +  tid  ] * x_k[ tid ] ; 
     s_data[ tid ] = input[ idx +  tid  ] * x_k[ tid ] ; 
@@ -110,9 +110,12 @@ void GPU_Reduction3( int n , int iter , float* input , float* sol , float* x_k ,
     cudaMemcpy( d_input , input  , n*n*sizeof(float) , cudaMemcpyHostToDevice);
     cudaMemcpy( d_sol   , sol    , n*sizeof(float)   , cudaMemcpyHostToDevice);
     
-    const int blocksize = 64 ; 
+    extern int g_Block_size ; 
+    //const int blocksize = g_Block_size ; 
+    const int blocksize = 512 ; 
     // const int numBlock = n ;
-    const int n_load = n / blocksize ; 
+    //const int n_load = n / blocksize ; 
+    const int n_load = ((n / blocksize)==0)? 1: n/blocksize ; 
     
     clock_t c_start = clock();
     for ( int it = 0 ; it < iter ; it++){

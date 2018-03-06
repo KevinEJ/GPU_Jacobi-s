@@ -44,8 +44,12 @@ void GPU_Memcoalesc( int n , int iter , float* input , float* sol , float* x_k ,
     cudaMemcpy( d_input , input  , n*n*sizeof(float) , cudaMemcpyHostToDevice);
     cudaMemcpy( d_sol   , sol    , n*sizeof(float)   , cudaMemcpyHostToDevice);
     
-    const int blocksize = 128 ; 
-    const int numBlock = n / blocksize ; 
+    extern int g_Block_size ; 
+    //const int blocksize = g_Block_size ; 
+    const int blocksize = 64 ; 
+    //const int numBlock  = n/blocksize ; 
+    const int numBlock = ((n / blocksize)==0)? 1: n/blocksize ; 
+    //const int numBlock = n / blocksize ; 
     for ( int it = 0 ; it < iter ; it++){
         printf( "iter = %d \n" , it ) ;
         MemCoalesc_kernel<<< numBlock , blocksize  >>> ( n , numBlock , d_input , d_sol , d_xk , d_xk1 ) ;

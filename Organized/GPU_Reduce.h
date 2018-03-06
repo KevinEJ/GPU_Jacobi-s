@@ -1,6 +1,6 @@
 
 __global__ void 
-Reduce_kernel ( const int n , const int numBlock, 
+Reduce_kernel ( const int n , const int n_load, 
                          const float* __restrict__ input , 
                          const float* __restrict__ sol , 
                          const float* __restrict__ x_k , 
@@ -9,44 +9,30 @@ Reduce_kernel ( const int n , const int numBlock,
     //const int idx = blockIdx.x * blockDim.x + threadIdx.x;
     const int bid = blockIdx.x  ;
     const int tid = threadIdx.x ;
+    const int idx = bid * n ;
+    const int blockSize = blockDim.x ;
 
     extern __shared__ float s_data[];
     //__syncthreads();
     //extern __shared__ int s_xk[1024];
-    s_data[ tid ] =  input[ bid*n + tid  ] * x_k[ tid ] 
-      + input[ bid*n + tid + blockDim.x ] * x_k[ tid + blockDim.x]  ;
-    //__syncthreads();
-    //s_data[ bid ] = 0 ; 
-    //s_xk[ tid ]    =  x_k[ tid ] ;   
+    if( tid >= n ) return ; 
+    
+    //s_data[ tid ] = input[ bid * n +  tid  ] * x_k[ tid ] ; 
+    s_data[ tid ] = input[ idx +  tid  ] * x_k[ tid ] ; 
+
+    for( int i = 1 ; i < n_load ; i++){
+        //s_data[ tid ] += input[ bid * n + i * blockSize + tid  ] * x_k[ i * blockSize + tid ] ; 
+        s_data[ tid ] += input[ idx + i * blockSize + tid  ] * x_k[ i * blockSize + tid ] ; 
+    }
+    
     __syncthreads();
 
     //float t = 0 ;
-   /* for(unsigned int s=1; s < blockDim.x; s *= 2) {
+    for(unsigned int s=1; s < blockDim.x; s *= 2) {
         if (tid % (2*s) == 0) {
             s_data[tid] += s_data[tid + s];
         }
         __syncthreads();
-    }*/
-    for (unsigned int s = blockDim.x/2 ; s > 32 ; s>>=1 ) {
-        if (tid < s) {
-            s_data[tid] += s_data[tid + s];
-        }
-        __syncthreads();
-    }
-    
-    if (tid < 32)
-    {
-        s_data[tid] += s_data[tid + 32];
-        __syncthreads();
-        s_data[tid] += s_data[tid + 16];
-        __syncthreads();
-        s_data[tid] += s_data[tid + 8];
-        __syncthreads();
-        s_data[tid] += s_data[tid + 4];
-        __syncthreads();
-        s_data[tid] += s_data[tid + 2];
-        __syncthreads();
-        s_data[tid] += s_data[tid + 1];
     }
 
     if( tid == 0 ){
@@ -61,6 +47,7 @@ Reduce_kernel ( const int n , const int numBlock,
 void GPU_Reduction( int n , int iter , float* input , float* sol , float* x_k , float* x_k1 ){
 
 
+    extern double exeTime ;  
     float* d_xk  ; //= new float[*n]; 
     float* d_xk1 ; //= new float[*n]; 
 
@@ -78,16 +65,24 @@ void GPU_Reduction( int n , int iter , float* input , float* sol , float* x_k , 
     cudaMemcpy( d_input , input  , n*n*sizeof(float) , cudaMemcpyHostToDevice);
     cudaMemcpy( d_sol   , sol    , n*sizeof(float)   , cudaMemcpyHostToDevice);
     
-    const int blocksize = 128 ; 
-    const int numBlock = n / blocksize ; 
+    extern int g_Block_size ; 
+    //const int blocksize = g_Block_size ; 
+    const int blocksize = 1024 ; 
+    //const int n_load = n / blocksize ; 
+    const int n_load = ((n / blocksize)==0)? 1: n/blocksize ; 
     
+    clock_t c_start = clock();
     for ( int it = 0 ; it < iter ; it++){
         printf( "iter = %d \n" , it ) ;
-        Reduce_kernel<<< n , n/2 , (n/2)*sizeof(float) >>> ( n , numBlock , d_input , d_sol , d_xk , d_xk1 ) ;
+        // Reduce_kernel<<< n , n/2 , (n/2)*sizeof(float) >>> ( n , n_load , d_input , d_sol , d_xk , d_xk1 ) ;
+        Reduce_kernel<<< n , blocksize , blocksize*sizeof(float) >>> 
+                            ( n , n_load , d_input , d_sol , d_xk , d_xk1 ) ; 
         cudaDeviceSynchronize(); 
         swap_pointer( d_xk , d_xk1 ) ; 
     }
 
+    clock_t c_end = clock();
+    exeTime = 1000.0 * (c_end-c_start) / CLOCKS_PER_SEC;
 
     cudaMemcpy( x_k   , d_xk   , n*sizeof(float) , cudaMemcpyDeviceToHost);
 

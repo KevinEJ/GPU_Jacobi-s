@@ -27,9 +27,9 @@ void GPU_Unified( int n , int iter , float* input , float* sol , float* x_k , fl
     extern double exeTime ;  
     float* u_input ; 
     float* u_sol   ; 
+    
     cudaMallocManaged(&u_input, n*n*sizeof(float));
     cudaMallocManaged(&u_sol  ,   n*sizeof(float));
-
     memcpy( u_input , input , n*n*sizeof(float) ) ; 
     memcpy( u_sol   , sol , n*sizeof(float) ) ; 
     //for( int i = 0 ; i < n*n ; i++)
@@ -42,8 +42,12 @@ void GPU_Unified( int n , int iter , float* input , float* sol , float* x_k , fl
     cudaMallocManaged(&u_xk1, n*sizeof(float));
 
     //Kernel
-    const int numBlock  = 160 ; 
-    const int blocksize = 32 ; 
+    extern int g_Block_size ; 
+    //const int blocksize = g_Block_size ; 
+    const int blocksize = 64 ; 
+    //const int numBlock  = n/blocksize ; 
+    const int numBlock = ((n / blocksize)==0)? 1: n/blocksize ; 
+    //const int blocksize = 32 ; 
     clock_t c_start = clock();
     for ( int it = 0 ; it < iter ; it++){
         printf( "iter = %d \n" , it ) ;
@@ -61,17 +65,7 @@ void GPU_Unified( int n , int iter , float* input , float* sol , float* x_k , fl
     //    x_k[i] = u_xk[i] ;
     
     memcpy( x_k   , u_xk , n*sizeof(float) ) ; 
-    printf( "Finish Copy   \n"  ) ;
     
-    //cudaFree(u_input);
-    //cudaFree(u_sol);
-    //cudaFree(u_xk);
-    //cudaFree(u_xk1);
-    //delete[] u_input; 
-    //delete[] u_sol; 
-    //delete[] u_xk; 
-    //delete[] u_xk1; 
-    printf( "Finish Func   \n"  ) ;
 }
 
 
